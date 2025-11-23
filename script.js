@@ -1,19 +1,7 @@
-// --- SUPABASE INITIALIZATION SECTION (FIXED for CDN) ---
+const supabaseUrl = 'https://puqitqdcrcrezwkonjkro.supabase.co'; 
+const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1cWl0cWRyY3Jlendrb25qa3JvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5MDYzNzcsImV4cCI6MjA3OTQ4MjM3N30.Z2NuUy9svkfbaSuCuQYO-Enh8pkjOErfC5ud_Y1Ups4'; 
 
-// 1. TANGGALIN ang "import { createClient } from '@supabase/supabase-js';"
-//    Dahil ginamit mo ang <script src="...supabase-js@2"></script> sa HTML,
-//    ang createClient ay available sa global variable na 'supabase'.
-
-// Kukunin ang URL at Key. Kailangan itong i-hardcode sa ganitong setup.
-// IYONG Supabase Project URL:
-const supabaseUrl = 'https://puqitqdcrcrezwkonjkro.supabase.co'; // !!! PALITAN ITO !!! (Project URL)
-// IYONG Supabase Anon/Publishable Key:
-const supabaseKey = 'IYONG_PUBLISHABLE_KEY_DITO'; // !!! PALITAN ITO !!! (Anon/Publishable Key)
-
-// I-initialize ang Supabase client gamit ang global object (depende sa CDN version, gagamitin natin ang 'window.supabase')
-// Tiyakin na ang CDN script ay nauna sa HTML!
 const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
-// ---------------------------------------------
 
 const defaultConfig = {
   background_color: "#f0f9ff",
@@ -29,35 +17,27 @@ const defaultConfig = {
   checkout_text: "Checkout"
 };
 
-// 1. Initialize referenceProducts as an empty array (changed from const to let)
 let referenceProducts = [];
 
-// --- MODIFIED SECTION START: SUPABASE FETCH ---
-// 2. Add function to fetch data from Supabase
 async function fetchProducts() {
   try {
-    // Ang code na ito ang hahalili sa pagtawag sa 'get_products.php'
     const { data, error } = await supabase
-      .from('products') // Dapat TAMA ang table name
+      .from('products') 
       .select('*');
 
     if (error) {
-      // Magpapakita ng error kung may problema sa RLS o koneksyon
       throw new Error(`Supabase error: ${error.message}`);
     }
 
-    // Tiyakin na ang data ay isang array bago i-map
     if (Array.isArray(data)) {
-      // I-map ang data para tiyakin na number ang price
       referenceProducts = data.map(item => ({
         ...item,
         price: parseFloat(item.price) 
       }));
     } else {
-      referenceProducts = []; // Kung walang data, gawing empty array
+      referenceProducts = [];
     }
 
-    // Re-render the shop view now that we have data
     renderShopView();
     
     console.log("Products loaded from Supabase:", referenceProducts);
@@ -66,11 +46,10 @@ async function fetchProducts() {
     showToast('Error connecting to Supabase. Check RLS policies or keys.');
   }
 }
-// --- MODIFIED SECTION END ---
 
 let cart = [];
 let currentCategory = "All";
-let currentView = "shop"; // shop or cart
+let currentView = "shop";
 
 const dataHandler = {
   onDataChanged(data) {
@@ -212,10 +191,8 @@ async function initApp() {
     });
   }
 
-  // 3. Render the app structure first
   renderApp();
   
-  // 4. Then fetch the products from Supabase
   await fetchProducts();
 }
 
@@ -242,7 +219,7 @@ function renderApp() {
       <div class="max-w-7xl mx-auto">
         <div id="shop-view"></div>
         <div id="cart-view" style="display: none;"></div>
-      </div>
+        </div>
     </main>
   `;
 
@@ -250,7 +227,230 @@ function renderApp() {
   renderShopView();
 }
 
-// ... (The rest of the functions: renderShopView, renderProducts, addToCart, updateCartBadge, toggleView, renderCartView, showCheckoutConfirmation, showToast remain the same)
+function renderShopView() {
+  const config = window.elementSdk?.config || defaultConfig;
+  const shopView = document.getElementById('shop-view');
+  
+  if (!shopView) return;
+
+  const categories = ['All', ...new Set(referenceProducts.map(p => p.category))];
+
+  const filterHtml = `
+    <div class="flex flex-wrap gap-4 mb-8">
+      ${categories.map(category => `
+        <button class="filter-btn px-4 py-2 rounded-full font-medium shadow-md hover:opacity-90 transition-all ${currentCategory === category ? 'active text-white' : 'text-gray-700'}" 
+          style="background-color: ${currentCategory === category ? config.primary_action_color || defaultConfig.primary_action_color : config.surface_color || defaultConfig.surface_color}; font-size: ${(config.font_size || defaultConfig.font_size) * 1.125}px;"
+          onclick="filterProducts('${category}')">
+          ${category}
+        </button>
+      `).join('')}
+    </div>
+  `;
+
+  const productsToDisplay = currentCategory === 'All'
+    ? referenceProducts
+    : referenceProducts.filter(p => p.category === currentCategory);
+
+  const productsHtml = productsToDisplay.length > 0
+    ? `<div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-8">
+      ${productsToDisplay.map(renderProductCard).join('')}
+      </div>`
+    : `<p class="text-center text-gray-500" style="font-size: ${config.font_size || defaultConfig.font_size}px;">No products found in this category.</p>`;
+  
+  shopView.innerHTML = filterHtml + productsHtml;
+  updateCartBadge();
+}
+
+function renderProductCard(product) {
+  const config = window.elementSdk?.config || defaultConfig;
+  const baseSize = config.font_size || defaultConfig.font_size;
+  const customFont = config.font_family || defaultConfig.font_family;
+  const baseFontStack = 'system-ui, -apple-system, sans-serif';
+
+  return `
+    <div class="product-card rounded-xl shadow-xl overflow-hidden flex flex-col p-6" style="background-color: ${config.surface_color || defaultConfig.surface_color};">
+      ${product.image ? `<img src="${product.image}" alt="${product.name}" class="w-full h-48 object-cover rounded-lg mb-4"/>` : ''}
+      <div class="flex-1">
+        <h3 class="product-title font-bold mb-2" style="color: ${config.text_color || defaultConfig.text_color}; font-size: ${baseSize * 1.125}px; font-family: ${customFont}, ${baseFontStack};">${product.name}</h3>
+        <p class="product-desc text-sm mb-4 opacity-80" style="color: ${config.text_color || defaultConfig.text_color}; font-size: ${baseSize * 0.875}px; font-family: ${customFont}, ${baseFontStack};">${product.description}</p>
+      </div>
+      <div class="flex justify-between items-center mt-4">
+        <span class="product-price font-bold" style="color: ${config.primary_action_color || defaultConfig.primary_action_color}; font-size: ${baseSize * 1.25}px; font-family: ${customFont}, ${baseFontStack};">$${product.price.toFixed(2)}</span>
+        <button class="add-to-cart-btn px-4 py-2 text-white rounded-lg font-medium hover:opacity-90 transition-all" 
+          style="background-color: ${config.primary_action_color || defaultConfig.primary_action_color}; font-size: ${baseSize}px; font-family: ${customFont}, ${baseFontStack};"
+          onclick="addToCart(${product.id})">
+          Add to Cart
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function filterProducts(category) {
+  currentCategory = category;
+  renderShopView();
+}
+
+function addToCart(productId) {
+  const product = referenceProducts.find(p => p.id === productId);
+  if (product) {
+    const existingItem = cart.find(item => item.id === productId);
+    if (existingItem) {
+      existingItem.quantity++;
+    } else {
+      cart.push({ ...product, quantity: 1 });
+    }
+    updateCartBadge();
+    showToast(`${product.name} added to cart!`);
+  }
+}
+
+function removeFromCart(productId) {
+  const initialLength = cart.length;
+  cart = cart.filter(item => item.id !== productId);
+  
+  if (cart.length < initialLength) {
+    renderCartView();
+    updateCartBadge();
+    showToast('Item removed from cart.');
+  }
+}
+
+function updateCartItemQuantity(productId, change) {
+  const item = cart.find(item => item.id === productId);
+  if (item) {
+    item.quantity += change;
+    if (item.quantity <= 0) {
+      removeFromCart(productId);
+    } else {
+      renderCartView();
+      updateCartBadge();
+    }
+  }
+}
+
+function updateCartBadge() {
+  const cartBadge = document.getElementById('cart-badge');
+  const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  if (cartBadge) {
+    cartBadge.textContent = totalItems;
+    cartBadge.style.display = totalItems > 0 ? 'block' : 'none';
+  }
+}
+
+function toggleView() {
+  currentView = currentView === 'shop' ? 'cart' : 'shop';
+  const shopView = document.getElementById('shop-view');
+  const cartView = document.getElementById('cart-view');
+
+  if (currentView === 'cart') {
+    shopView.style.display = 'none';
+    cartView.style.display = 'block';
+    renderCartView();
+    document.querySelector('.cart-btn-text').textContent = 'Back to Shop';
+  } else {
+    shopView.style.display = 'block';
+    cartView.style.display = 'none';
+    document.querySelector('.cart-btn-text').textContent = (window.elementSdk?.config || defaultConfig).view_cart_text || defaultConfig.view_cart_text;
+  }
+}
+
+function renderCartView() {
+  const config = window.elementSdk?.config || defaultConfig;
+  const cartView = document.getElementById('cart-view');
+  const baseSize = config.font_size || defaultConfig.font_size;
+  const customFont = config.font_family || defaultConfig.font_family;
+  const baseFontStack = 'system-ui, -apple-system, sans-serif';
+
+  const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  const totalDisplay = total.toFixed(2);
+
+  if (cart.length === 0) {
+    cartView.innerHTML = `<h2 class="text-2xl font-bold mb-4" style="color: ${config.text_color || defaultConfig.text_color}; font-size: ${baseSize * 1.5}px;">Your Cart is Empty 🛒</h2>`;
+    return;
+  }
+
+  const cartItemsHtml = cart.map(item => `
+    <div class="cart-item flex justify-between items-center p-4 border-b last:border-b-0" style="border-bottom-color: ${config.secondary_action_color || defaultConfig.secondary_action_color}50;">
+      <div class="flex-1">
+        <h4 class="cart-item-name font-medium" style="color: ${config.text_color || defaultConfig.text_color}; font-size: ${baseSize * 1.125}px; font-family: ${customFont}, ${baseFontStack};">${item.name}</h4>
+        <span class="cart-item-price text-sm" style="color: ${config.primary_action_color || defaultConfig.primary_action_color}; font-size: ${baseSize}px; font-family: ${customFont}, ${baseFontStack};">$${item.price.toFixed(2)} each</span>
+      </div>
+      <div class="flex items-center gap-4">
+        <div class="flex items-center border rounded-lg" style="border-color: ${config.secondary_action_color || defaultConfig.secondary_action_color};">
+          <button class="px-3 py-1 text-lg font-bold" onclick="updateCartItemQuantity(${item.id}, -1)">-</button>
+          <span class="px-3" style="font-size: ${baseSize * 1.125}px;">${item.quantity}</span>
+          <button class="px-3 py-1 text-lg font-bold" onclick="updateCartItemQuantity(${item.id}, 1)">+</button>
+        </div>
+        <span class="font-bold w-20 text-right" style="color: ${config.primary_action_color || defaultConfig.primary_action_color}; font-size: ${baseSize * 1.25}px;">$${(item.price * item.quantity).toFixed(2)}</span>
+        <button class="remove-item-btn text-sm opacity-70 hover:opacity-100 transition-all" 
+          style="color: ${config.secondary_action_color || defaultConfig.secondary_action_color}; font-size: ${baseSize * 0.875}px; font-family: ${customFont}, ${baseFontStack};"
+          onclick="removeFromCart(${item.id})">
+          (Remove)
+        </button>
+      </div>
+    </div>
+  `).join('');
+
+  cartView.innerHTML = `
+    <h2 class="text-3xl font-bold mb-6" style="color: ${config.text_color || defaultConfig.text_color}; font-size: ${baseSize * 1.75}px;">Shopping Cart</h2>
+    <div class="bg-white rounded-xl shadow-2xl p-6">
+      <div class="divide-y divide-gray-200">
+        ${cartItemsHtml}
+      </div>
+      <div class="mt-6 flex justify-end items-center">
+        <span class="text-2xl font-bold mr-4" style="color: ${config.text_color || defaultConfig.text_color}; font-size: ${baseSize * 1.5}px;">Total:</span>
+        <span class="text-3xl font-extrabold" style="color: ${config.primary_action_color || defaultConfig.primary_action_color}; font-size: ${baseSize * 2}px;">$${totalDisplay}</span>
+      </div>
+      <div class="mt-6 flex justify-end">
+        <button id="checkout-btn" class="px-8 py-3 text-white rounded-full font-bold shadow-lg hover:opacity-90 transition-all" 
+          style="background-color: ${config.primary_action_color || defaultConfig.primary_action_color}; font-size: ${baseSize * 1.125}px; font-family: ${customFont}, ${baseFontStack};"
+          onclick="showCheckoutConfirmation()">
+          ${config.checkout_text || defaultConfig.checkout_text}
+        </button>
+      </div>
+    </div>
+  `;
+}
+
+function showCheckoutConfirmation() {
+  if (window.dataSdk) {
+    window.dataSdk.postData({
+      type: 'checkout_request',
+      cart: cart,
+      total: cart.reduce((sum, item) => sum + (item.price * item.quantity), 0)
+    });
+    showToast('Checkout requested. Check your data handler for the order.');
+  } else {
+    showToast('Checkout functionality requires the Data SDK.', 'error');
+  }
+}
+
+function showToast(message, type = 'success') {
+  const toast = document.createElement('div');
+  const config = window.elementSdk?.config || defaultConfig;
+  
+  const bgColor = type === 'success' ? config.primary_action_color || defaultConfig.primary_action_color : '#ef4444';
+  
+  toast.className = 'fixed bottom-5 right-5 px-6 py-3 text-white rounded-lg shadow-xl transition-opacity duration-300 z-50';
+  toast.style.backgroundColor = bgColor;
+  toast.style.opacity = '0';
+  toast.textContent = message;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    toast.style.opacity = '1';
+  }, 10);
+
+  setTimeout(() => {
+    toast.style.opacity = '0';
+    setTimeout(() => {
+      document.body.removeChild(toast);
+    }, 300);
+  }, 3000);
+}
 
 // Initialize
 initApp();
