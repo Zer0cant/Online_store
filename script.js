@@ -1,7 +1,7 @@
 const supabaseUrl = 'https://puqitqdcrcrezwkonjkro.supabase.co'; 
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InB1cWl0cWRyY3Jlendrb25qa3JvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM5MDYzNzcsImV4cCI6MjA3OTQ4MjM3N30.Z2NuUy9svkfbaSuCuQYO-Enh8pkjOErfC5ud_Y1Ups4'; 
 
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
+const supabase = supabase.createClient(supabaseUrl, supabaseKey);
 
 const defaultConfig = {
   background_color: "#f0f9ff",
